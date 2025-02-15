@@ -1,4 +1,4 @@
-import socket, os
+import socket, os, time, pathlib
 from db import DatabaseManager
 
 class Server:
@@ -84,7 +84,7 @@ class DownloadDaemon:
                 os.makedirs('synced_download', exist_ok=True)
 
                 with open(file_path, 'wb') as f:
-                    while chunk := client .recv(4096):
+                    while chunk := client.recv(4096):
                         f.write(chunk)
                 client.close()
                 self.dbm.add_file(file_path)
@@ -117,6 +117,16 @@ class DownloadDaemon:
     def monitoring(self):
         while True:
             # TODO: monitor shared.db for changes, and if there is an update from external devices, download new db
+            time.sleep(15)
+
+            directories2check = self.dbm.get_local_directories()
+            for path in directories2check:        
+                path = pathlib.Path(path).resolve()
+                for file in path.rglob('*'):
+                    if file.is_file():
+                        dbm.add_file(str(file))
+            
+                
 
 
 

@@ -44,6 +44,11 @@ class DatabaseManager:
                     ignored BOOLEAN DEFAULT 0
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS directories (
+                    path TEXT NOT NULL
+                )
+            """)
             conn.commit()
 
     def _calculate_file_hash(self, file_path, chunk_size=65536):
@@ -53,6 +58,16 @@ class DatabaseManager:
             for chunk in iter(lambda: f.read(chunk_size), b''):
                 hasher.update(chunk)
         return hasher.hexdigest()   
+
+    def add_directory(self, dir_path: str):
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO directories (path )
+                VALUES (?)
+            """, (dir_path, ))
+            conn.commit()
+
 
     def add_file(self, file_path: str):
         """Add file to both DB"""
@@ -79,6 +94,13 @@ class DatabaseManager:
             """, (file_hash, str(file_path)))
             conn.commit()
     
+    def get_local_directories(self):
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT path FROM directories')
+            result = cursor.fetchall()
+            return [row[0] for row in result
+
     def get_file_path_by_hash(self, file_hash: str):
         with sqlite3.connect(self.local_db) as conn:
             cursor = conn.cursor()
