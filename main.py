@@ -21,7 +21,7 @@ def addDevice():
 
     print('Magnet-link:', magnet_link)
     print('This link contains encryption key and should be shared securely.')
-    threading.Thread(target=server.start_db_server, daemon=True).start()
+    threading.Thread(target=server.Server().start_db_server, daemon=True).start()
     print('Database sharing server started')
 
 def download_missing_files():
@@ -78,11 +78,12 @@ def connect2device():
         link_data, key = link_resolver.MagnetLinkGenerator.decode_link(magnet_link)
         shared_db_hash = link_data['db_hash']
         ip = link_data['ip']
+        s = server.Server()
 
         print(f'Connected to device! Shared DB hash: {shared_db_hash}')
         print(f'Encryption key (store securely!): {key.hex()}')
         
-        server.download_shared_db(ip)
+        s.download_shared_db(ip)
 
         dbm = db.DatabaseManager()
         dbm.add_device(link_data['device_id'], ip)
@@ -103,6 +104,8 @@ def removeFiles():
             print(f"File {file} uncynsed now")
 
 if __name__ == '__main__':
+    threading.Thread(target=server.Server().start_file_server, daemon=True).start()
+
     while True:
         print('Welcome to CatchFile 0.1a, an opensource tool for synchronizing'
            'files on all your devices. Here\'s menu:\n'
