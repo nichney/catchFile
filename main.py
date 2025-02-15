@@ -82,7 +82,7 @@ def connect2device():
         print(f'Connected to device! Shared DB hash: {shared_db_hash}')
         print(f'Encryption key (store securely!): {key.hex()}')
         
-        download_shared_db(ip)
+        server.download_shared_db(ip)
 
         dbm = db.DatabaseManager()
         dbm.add_device(link_data['device_id'], ip)
