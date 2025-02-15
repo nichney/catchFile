@@ -12,7 +12,7 @@ def addDirectory():
         if file.is_file():
             dbm.add_file(str(file))
             print(f'File {file} added to db')
-    dbm.add_directory(path)
+    dbm.add_directory(str(path))
 
 
 def addDevice():

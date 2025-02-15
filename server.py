@@ -124,7 +124,7 @@ class DownloadDaemon:
                 path = pathlib.Path(path).resolve()
                 for file in path.rglob('*'):
                     if file.is_file():
-                        dbm.add_file(str(file))
+                        self.dbm.add_file(str(file))
             
                 
 

@@ -46,7 +46,7 @@ class DatabaseManager:
             """)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS directories (
-                    path TEXT NOT NULL
+                    path TEXT PRIMARY KEY
                 )
             """)
             conn.commit()
