@@ -80,7 +80,7 @@ class DatabaseManager:
             """, (file_hash, str(file_path)))
             conn.commit()
     
-    def get_file_path_by_hash(self, fila_hash: str):
+    def get_file_path_by_hash(self, file_hash: str):
         with sqlite3.connect(self.local_db) as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT path FROM local_files WHERE hash = ?', (file_hash, ))
