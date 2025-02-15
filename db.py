@@ -107,6 +107,12 @@ class DatabaseManager:
             cursor.execute('SELECT path FROM local_files WHERE hash = ?', (file_hash, ))
             result = cursor.fetchone()
             return result[0] if result else None
+    def get_file_hash_by_path(self, file_path: str):
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT hash FROM local_files WHERE path = ?', (file_path, ))
+            result = cursor.fetchone()
+            return result[0] if result else None
 
     def add_device(self, ip):
         with sqlite3.connect(self.shared_db) as conn:

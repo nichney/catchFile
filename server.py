@@ -1,4 +1,4 @@
-import socket, os, time, pathlib, hashlib
+import socket, os, time, pathlib, hashlib, threading
 from db import DatabaseManager
 
 class Server:
@@ -74,6 +74,8 @@ class DownloadDaemon:
         self.dbm = DatabaseManager()
         self.myip = self.get_local_ip()
         self.s = Server()
+        self.dbm.add_device(self.myip)
+        self.db_lock = threading.Lock()
 
     def get_local_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -96,6 +98,7 @@ class DownloadDaemon:
                     while chunk := client.recv(4096):
                         f.write(chunk)
                 client.close()
+                self.dbm.add_directory('synced_download')
                 self.dbm.add_file(file_path)
                 return True
             else:
@@ -103,7 +106,7 @@ class DownloadDaemon:
                 client.close()
                 return False
         except Exception as e:
-            print(f'Failed to download {fila_hash} from {host}: {e}')
+            print(f'Failed to download {file_hash} from {host}: {e}')
             return False
     
     def download_missing_files(self):
@@ -135,25 +138,48 @@ class DownloadDaemon:
                     print(f'Failed to notify {ip}: {e}')
             
     def monitoring(self):
-        last_files = self.dbm.get_local_files()
+        with self.db_lock:
+            last_files_paths = [ row[1] for row in self.dbm.get_local_files()]
         while True:
             time.sleep(15)
 
-            directories2check = self.dbm.get_local_directories()
+            # File in base, but not in directory
+            for path in last_files_paths:
+                print(f'Checking {path} directory for missings')
+                path = pathlib.Path(path).resolve()
+                if not path.exists():
+                    print(f'{path} is missing!')
+                    with self.db_lock:
+                        shared_ips = self.dbm.get_known_ips()
+                        file_hash = self.dbm.get_file_hash_by_path(str(path))
+                    for ip in shared_ips:
+                        print(f'Requesting {file_hash} from {ip}')
+                        if self.download_file_from_peer(ip, file_hash):
+                            print(f'File {file_hash} downloaded!')
+                            break
+                    else:
+                        print(f'File {file_hash} not found on any device')
+
+            # File in directory, but not in base
+            with self.db_lock:
+                directories2check = self.dbm.get_local_directories()
             for path in directories2check:
+                print(f'Checking {path} directory for updates')
                 path = pathlib.Path(path).resolve()
                 for file in path.rglob('*'):
-                    if file.is_file():
-                        self.dbm.add_file(str(file))
+                    if file not in last_files_paths and file.is_file():
+                        with self.db_lock:
+                            self.dbm.add_file(str(file)) # here we add new file to DB
 
-            current_files = self.dbm.get_local_files()
-            if current_files != last_files:
+            with self.db_lock:
+                current_files = [ row[1] for row in self.dbm.get_local_files()]
+            if current_files != last_files_paths:
                 print("shared.db has changed, notifying devices...")
                 self.notify_devices()
-                last_files = current_files
+                last_files_paths = current_files
 
             self.download_missing_files()
-            
+        pass 
                 
 
 
