@@ -8,10 +8,13 @@ import os
 import hashlib
 import socket
 
+import server
+
 class MagnetLinkGenerator:
     def __init__(self, shared_db="shared.db"):
         self.shared_db = shared_db
         self.device_id = self._generate_device_id()
+        self.myip = server.DownloadDaemon().get_local_ip()
 
     def _generate_device_id(self):
         return str(uuid.uuid4())
@@ -36,20 +39,12 @@ class MagnetLinkGenerator:
         nonce, ciphertext = decoded[:12], decoded[12:]
         return aesgcm.decrypt(nonce, ciphertext, None).decode()
 
-    def _get_local_ip(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
-
     def generate_magnet_link(self, key):
         """Create encrypted magnet-link, including encryption key"""
         shared_db_hash = self._calculate_db_hash()
-        ip_address = self._get_local_ip()
         payload = json.dumps({"device_id": self.device_id, 
                               "db_hash": shared_db_hash,
-                              "ip": ip_address
+                              "ip": self.myip
                               })
 
         encrypted_payload = self._encrypt_data(payload, key)

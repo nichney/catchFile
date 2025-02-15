@@ -21,54 +21,6 @@ def addDevice():
 
     print('Magnet-link:', magnet_link)
     print('This link contains encryption key and should be shared securely.')
-    threading.Thread(target=server.Server().start_db_server, daemon=True).start()
-    print('Database sharing server started')
-
-def download_missing_files():
-    dbm = db.DatabaseManager()
-    missing_files = dbm.get_missing_files()
-
-    if not missing_files:
-        print('No missing files found.')
-        return
-
-    shared_ips = dbm.get_known_ips()
-
-    for file_hash in missing_files:
-        for ip in shared_ips:
-            print(f'Requesting {file_hash} from {ip}...')
-            if download_file_from_peer(ip, file_hash):
-                print(f'File {file_hash} downloaded!')
-                break
-        else:
-            print(f'File {file_hash} not found on any device.')
-
-def download_file_from_peer(host, file_hash):
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        client.connect((host, 65432))
-        client.send(file_hash.encode())  
-
-        response = client.recv(2)
-        if response == b'OK':
-            file_path = f'downloads/{file_hash}' 
-            os.makedirs('downloads', exist_ok=True)
-
-            with open(file_path, 'wb') as f:
-                while chunk := client.recv(4096):
-                    f.write(chunk)
-
-            client.close()
-            dbm = db.DatabaseManager()
-            dbm.add_file(file_path)
-            return True
-        else:
-            print(f'File {file_hash} not found on {host}.')
-            client.close()
-            return False
-    except Exception as e:
-        print(f'Failed to download {file_hash} from {host}: {e}')
-        return False
 
 
 def connect2device():
@@ -86,8 +38,8 @@ def connect2device():
         s.download_shared_db(ip)
 
         dbm = db.DatabaseManager()
-        dbm.add_device(link_data['device_id'], ip)
-        download_missing_files()
+        dbm.add_device(ip)
+        server.DownloadDaemon.download_missing_files()
     except Exception as e:
         print(f'Failed to connect: {e}')
 
@@ -104,7 +56,12 @@ def removeFiles():
             print(f"File {file} uncynsed now")
 
 if __name__ == '__main__':
+    threading.Thread(target=server.Server().start_db_server, daemon=True).start()
+    print('Database sharing server started')
     threading.Thread(target=server.Server().start_file_server, daemon=True).start()
+    print('File sharing server started')
+    threading.Thread(target=server.DownloadDaemon.monitoring, daemon=True).start()
+    print('Monitoring demon started')
 
     while True:
         print('Welcome to CatchFile 0.1a, an opensource tool for synchronizing'
