@@ -144,6 +144,7 @@ class DatabaseManager:
             """, (file_hash,))
             conn.commit()
 
+
     def get_missing_files(self):
         """List of missing files"""
         with sqlite3.connect(self.shared_db) as shared_conn, sqlite3.connect(self.local_db) as local_conn:

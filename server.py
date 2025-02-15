@@ -182,33 +182,3 @@ class DownloadDaemon:
         pass 
                 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
