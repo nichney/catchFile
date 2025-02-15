@@ -1,8 +1,28 @@
+from pathlib import Path # to resolve path
+import hashlib 
+import db #DataBase logic
+
+def calculate_file_hash(file_path, chunk_size=65536):
+    # SHA-256
+    hasher = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(chunk_size), b''):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
 def addDirectory():
     # Add directory to syncing.
     # TODO: dialogue to get directory path and write it to database
-    path = input("Enter a directory path on your local device: ").strip()
-    # TODO: check correctness
+    path = Path(input("Enter a directory path on your local device: ").strip()).resolve()
+    
+    dbm = db.DatabaseManager()
+    for file in path.rglob('*'):
+        if file.is_file():
+            dbm.add_file(str(file), calculate_file_hash(file))
+            print(f"File {file} added to db")
+
+
+
 
 def addDevice():
     # TODO: generate a magnet link

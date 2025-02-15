@@ -1,0 +1,91 @@
+# DataBase logic, using SQLite
+
+import sqlite3
+from pathlib import Path
+import time
+
+class DatabaseManager:
+    def __init__(self, shared_db="shared.db", local_db="local.db"):
+        self.shared_db = shared_db
+        self.local_db = local_db
+        self._init_shared_db()
+        self._init_local_db()
+
+    def _init_shared_db(self):
+        """Create shared DB if not exists"""
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS files (
+                    hash TEXT PRIMARY KEY,
+                    filename TEXT NOT NULL,
+                    size INTEGER,
+                    last_modified INTEGER,
+                    deleted BOOLEAN DEFAULT 0
+                )
+            """)
+            conn.commit()
+
+    def _init_local_db(self):
+        """Create local DB if not exists"""
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS local_files (
+                    hash TEXT PRIMARY KEY,
+                    path TEXT NOT NULL
+                )
+            """)
+            conn.commit()
+
+    def add_file(self, file_path: str, file_hash: str):
+        """Add file to both DB"""
+        file_path = Path(file_path).resolve()
+        if not file_path.exists() or not file_path.is_file():
+            raise ValueError("File does not exists")
+        file_size = file_path.stat().st_size
+        last_modified = int(file_path.stat().st_mtime)
+
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO files (hash, filename, size, last_modified, deleted)
+                VALUES (?, ?, ?, ?, 0)
+            """, (file_hash, file_path.name, file_size, last_modified))
+            conn.commit()
+
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO local_files (hash, path)
+                VALUES (?, ?)
+            """, (file_hash, str(file_path)))
+            conn.commit()
+
+    def remove_file(self, file_hash: str):
+        """Mark file in DB as deleted"""
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE files SET deleted = 1 WHERE hash = ?", (file_hash,))
+            conn.commit()
+
+    def get_missing_files(self):
+        """List of missing files"""
+        with sqlite3.connect(self.shared_db) as shared_conn, sqlite3.connect(self.local_db) as local_conn:
+            shared_cursor = shared_conn.cursor()
+            local_cursor = local_conn.cursor()
+
+            shared_cursor.execute("SELECT hash FROM files WHERE deleted = 0")
+            shared_files = {row[0] for row in shared_cursor.fetchall()}
+
+            local_cursor.execute("SELECT hash FROM local_files")
+            local_files = {row[0] for row in local_cursor.fetchall()}
+
+            return list(shared_files - local_files)
+
+    def get_local_files(self):
+        """List of local files"""
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM local_files")
+            return cursor.fetchall()
