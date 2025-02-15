@@ -1,5 +1,7 @@
 from pathlib import Path # to resolve path
+import os
 import db #DataBase logic
+import link_resolver # for magnet links
 
 def addDirectory():
     path = Path(input("Enter a directory path on your local device: ").strip()).resolve()
@@ -12,12 +14,34 @@ def addDirectory():
 
 
 def addDevice():
-    # TODO: generate a magnet link
-    pass
+    key = os.urandom(32) 
+    generator = MagnetLinkGenerator()
+    magnet_link = generator.generate_magnet_link(key)
+
+    print("Magnet-link:", magnet_link)
+    print("This link contains encryption key and should be shared securely.")
 
 def connect2device():
-    # TODO: connect by magnet link from other device
-    pass
+    magnet_link = input("Enter link to connect device: ").strip()
+
+    try:
+        link_data, key = MagnetLinkGenerator.decode_link(magnet_link)
+        shared_db_hash = link_data['db_hash']
+
+        print(f'Connected to device! Shared DB hash: {shared_db_hash}')
+        print(f'Encryption key (store securely!): {key.hex()}')
+
+        dbm = db.DatabaseManager()
+        missing_files = dbm.get_missing_files()
+        if missing_files:
+            print('Requesting missing files...')
+            for file_hash in missing_files:
+                print(f'Need file {file_hash}')
+                # TODO: download missing files
+        else:
+            print('All files are up to date')
+    except Exception as e:
+        print(f'Failed to connect: {e}')
 
 def removeDirectory():
     # TODO: stop syncing existing directory, but do not delete it
