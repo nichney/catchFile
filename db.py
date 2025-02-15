@@ -137,3 +137,11 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM local_files")
             return cursor.fetchall()
+
+    def get_known_ips(self):
+        """Retrieve a list of known IP addresses from the devices table."""
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT ip FROM devices")
+            result = cursor.fetchall()
+            return [row[0] for row in result]
