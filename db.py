@@ -3,6 +3,7 @@
 import sqlite3
 from pathlib import Path
 import time
+import hashlib
 
 class DatabaseManager:
     def __init__(self, shared_db="shared.db", local_db="local.db"):
@@ -38,8 +39,17 @@ class DatabaseManager:
             """)
             conn.commit()
 
-    def add_file(self, file_path: str, file_hash: str):
+    def _calculate_file_hash(self, file_path, chunk_size=65536):
+        """Calculate SHA-256 for files"""
+        hasher = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(chunk_size), b''):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+
+    def add_file(self, file_path: str):
         """Add file to both DB"""
+        file_hash = self._caltulate_file_hash(file_path)
         file_path = Path(file_path).resolve()
         if not file_path.exists() or not file_path.is_file():
             raise ValueError("File does not exists")

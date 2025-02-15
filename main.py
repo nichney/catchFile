@@ -1,14 +1,5 @@
 from pathlib import Path # to resolve path
-import hashlib 
 import db #DataBase logic
-
-def calculate_file_hash(file_path, chunk_size=65536):
-    # SHA-256
-    hasher = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(chunk_size), b''):
-            hasher.update(chunk)
-    return hasher.hexdigest()
 
 def addDirectory():
     # Add directory to syncing.
@@ -18,7 +9,7 @@ def addDirectory():
     dbm = db.DatabaseManager()
     for file in path.rglob('*'):
         if file.is_file():
-            dbm.add_file(str(file), calculate_file_hash(file))
+            dbm.add_file(str(file))
             print(f"File {file} added to db")
 
 
