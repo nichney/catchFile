@@ -61,7 +61,7 @@ if __name__ == '__main__':
     print('Database sharing server started')
     threading.Thread(target=server.Server().start_file_server, daemon=True).start()
     print('File sharing server started')
-    threading.Thread(target=server.DownloadDaemon.monitoring, daemon=True).start()
+    threading.Thread(target=server.DownloadDaemon().monitoring, daemon=True).start()
     print('Monitoring demon started')
 
     while True:
