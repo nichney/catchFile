@@ -2,8 +2,8 @@
 
 import sqlite3
 from pathlib import Path
-import time
 import hashlib
+import time
 
 class DatabaseManager:
     def __init__(self, shared_db="shared.db", local_db="local.db"):
@@ -34,27 +34,28 @@ class DatabaseManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS local_files (
                     hash TEXT PRIMARY KEY,
-                    path TEXT NOT NULL
+                    path TEXT NOT NULL,
+                    ignored BOOLEAN DEFAULT 0
                 )
             """)
             conn.commit()
 
     def _calculate_file_hash(self, file_path, chunk_size=65536):
-        """Calculate SHA-256 for files"""
+        # SHA-256
         hasher = hashlib.sha256()
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(chunk_size), b''):
                 hasher.update(chunk)
-        return hasher.hexdigest()
+        return hasher.hexdigest()   
 
     def add_file(self, file_path: str):
         """Add file to both DB"""
-        file_hash = self._caltulate_file_hash(file_path)
         file_path = Path(file_path).resolve()
         if not file_path.exists() or not file_path.is_file():
             raise ValueError("File does not exists")
         file_size = file_path.stat().st_size
         last_modified = int(file_path.stat().st_mtime)
+        file_hash =  self._calculate_file_hash(file_path)
 
         with sqlite3.connect(self.shared_db) as conn:
             cursor = conn.cursor()
@@ -67,8 +68,8 @@ class DatabaseManager:
         with sqlite3.connect(self.local_db) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT OR REPLACE INTO local_files (hash, path)
-                VALUES (?, ?)
+                INSERT OR REPLACE INTO local_files (hash, path, ignored)
+                VALUES (?, ?, 0)
             """, (file_hash, str(file_path)))
             conn.commit()
 
@@ -77,6 +78,20 @@ class DatabaseManager:
         with sqlite3.connect(self.shared_db) as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE files SET deleted = 1 WHERE hash = ?", (file_hash,))
+            conn.commit()
+
+    def unsync_file(self, file_path: str):
+        """Stop syncing file"""
+        file_path = Path(file_path).resolve()
+        if not file_path.exists() or not file_path.is_file():
+            raise ValueError("File does not exist") 
+        file_hash =  self._calculate_file_hash(file_path)
+
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE local_files SET ignored = 1 WHERE hash LIKE ?
+            """, (file_hash,))
             conn.commit()
 
     def get_missing_files(self):
@@ -88,7 +103,7 @@ class DatabaseManager:
             shared_cursor.execute("SELECT hash FROM files WHERE deleted = 0")
             shared_files = {row[0] for row in shared_cursor.fetchall()}
 
-            local_cursor.execute("SELECT hash FROM local_files")
+            local_cursor.execute("SELECT hash FROM local_files WHERE ignored = 0")
             local_files = {row[0] for row in local_cursor.fetchall()}
 
             return list(shared_files - local_files)

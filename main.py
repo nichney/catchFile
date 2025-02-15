@@ -2,8 +2,6 @@ from pathlib import Path # to resolve path
 import db #DataBase logic
 
 def addDirectory():
-    # Add directory to syncing.
-    # TODO: dialogue to get directory path and write it to database
     path = Path(input("Enter a directory path on your local device: ").strip()).resolve()
     
     dbm = db.DatabaseManager()
@@ -11,8 +9,6 @@ def addDirectory():
         if file.is_file():
             dbm.add_file(str(file))
             print(f"File {file} added to db")
-
-
 
 
 def addDevice():
@@ -28,10 +24,12 @@ def removeDirectory():
     pass
 
 def removeFiles():
-    # TODO: mark files in database as deleted
-    # an idea is to give a special mark in database for deleting file, and other devices, if they get that mark, 
-    # delete such file, but do not delete database entry
-    pass
+    path = Path(input("Enter a directory path on your local device to remove it from sync: ").strip()).resolve()
+    dbm = db.DatabaseManager()
+    for file in path.rglob('*'):
+        if file.is_file():
+            dbm.unsync_file(str(file))
+            print(f"File {file} uncynsed now")
 
 if __name__ == '__main__':
     while True:
