@@ -50,7 +50,7 @@ class MagnetLinkGenerator:
         """Decode magnet link"""
         try:
             query = magnet_link.split("magnet:?")[1]
-            params = dict(item.split("=") for item in query.split("&"))
+            params = dict(item.split("=", 1) for item in query.split("&"))
 
             encrypted_data = params.get("data")
             encrypted_key = params.get("key")
