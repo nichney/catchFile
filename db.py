@@ -25,6 +25,13 @@ class DatabaseManager:
                     deleted BOOLEAN DEFAULT 0
                 )
             """)
+            cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS devices (
+                        device_id TEXT PRIMARY KEY,
+                        ip TEXT NOT NULL, 
+                        last_seen INTEGER
+                    )
+            """)
             conn.commit()
 
     def _init_local_db(self):
@@ -71,6 +78,22 @@ class DatabaseManager:
                 INSERT OR REPLACE INTO local_files (hash, path, ignored)
                 VALUES (?, ?, 0)
             """, (file_hash, str(file_path)))
+            conn.commit()
+    
+    def get_file_path_by_hash(self, fila_hash: str):
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT path FROM local_files WHERE hash = ?', (file_hash, ))
+            result = cursore.fetchone()
+            return result[0] if result else None
+
+    def add_device(self, device_id, ip):
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursore.execute("""
+                INSERT INTO devices (device_id, ip, last_seen)
+                VALUES (?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET ip=?, last_seen=?
+            """, (device_id, ip, int(time.time()), ip, int(time.time())))
             conn.commit()
 
     def remove_file(self, file_hash: str):

@@ -1,17 +1,17 @@
 from pathlib import Path # to resolve path
-import os
+import os, threading, socket
 import db #DataBase logic
 import link_resolver # for magnet links
 import server
 
 def addDirectory():
-    path = Path(input("Enter a directory path on your local device: ").strip()).resolve()
+    path = Path(input('Enter a directory path on your local device: ').strip()).resolve()
     
     dbm = db.DatabaseManager()
     for file in path.rglob('*'):
         if file.is_file():
             dbm.add_file(str(file))
-            print(f"File {file} added to db")
+            print(f'File {file} added to db')
 
 
 def addDevice():
@@ -19,8 +19,57 @@ def addDevice():
     generator = link_resolver.MagnetLinkGenerator()
     magnet_link = generator.generate_magnet_link(key)
 
-    print("Magnet-link:", magnet_link)
-    print("This link contains encryption key and should be shared securely.")
+    print('Magnet-link:', magnet_link)
+    print('This link contains encryption key and should be shared securely.')
+    threading.Thread(target=server.start_db_server, daemon=True).start()
+    print('Database sharing server started')
+
+def download_missing_files():
+    dbm = db.DatabaseManager()
+    missing_files = dbm.get_missing_files()
+
+    if not missing_files:
+        print('No missing files found.')
+        return
+
+    shared_ips = dbm.get_known_ips()
+
+    for file_hash in missing_files:
+        for ip in shared_ips:
+            print(f'Requesting {file_hash} from {ip}...')
+            if download_file_from_peer(ip, file_hash):
+                print(f'File {file_hash} downloaded!')
+                break
+        else:
+            print(f'File {file_hash} not found on any device.')
+
+def download_file_from_peer(host, file_hash):
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        client.connect((host, 65432))
+        client.send(file_hash.encode())  
+
+        response = client.recv(2)
+        if response == b'OK':
+            file_path = f'downloads/{file_hash}' 
+            os.makedirs('downloads', exist_ok=True)
+
+            with open(file_path, 'wb') as f:
+                while chunk := client.recv(4096):
+                    f.write(chunk)
+
+            client.close()
+            dbm = db.DatabaseManager()
+            dbm.add_file(file_path)
+            return True
+        else:
+            print(f'File {file_hash} not found on {host}.')
+            client.close()
+            return False
+    except Exception as e:
+        print(f'Failed to download {file_hash} from {host}: {e}')
+        return False
+
 
 def connect2device():
     magnet_link = input("Enter link to connect device: ").strip()
@@ -36,14 +85,8 @@ def connect2device():
         download_shared_db(ip)
 
         dbm = db.DatabaseManager()
-        missing_files = dbm.get_missing_files()
-        if missing_files:
-            print('Requesting missing files...')
-            for file_hash in missing_files:
-                print(f'Need file {file_hash}')
-                # TODO: download missing files
-        else:
-            print('All files are up to date')
+        dbm.add_device(link_data['device_id'], ip)
+        download_missing_files()
     except Exception as e:
         print(f'Failed to connect: {e}')
 
