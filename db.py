@@ -81,7 +81,7 @@ class DatabaseManager:
         with sqlite3.connect(self.shared_db) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT OR REPLACE INTO files (hash, filename, size, last_modified, deleted)
+                INSERT OR REPLACE INTO local_files (hash, filename, size, last_modified, deleted)
                 VALUES (?, ?, ?, ?, 0)
             """, (file_hash, file_path.name, file_size, last_modified))
             conn.commit()
