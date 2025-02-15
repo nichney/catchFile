@@ -32,7 +32,7 @@ class Server:
     def start_db_server(self):
         """Open server to share shared.db"""
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.bind(("0.0.0.0", 65432))
+        server.bind(("0.0.0.0", 65431))
         server.listen(1)
         print("Waiting for incoming connection...")
 
@@ -49,7 +49,7 @@ class Server:
     def download_shared_db(self, host):
         """Download shared.db"""
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.connect((host, 65432))
+        client.connect((host, 65431))
 
         with open("shared.db", "wb") as f:
             while chunk := client.recv(4096):

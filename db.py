@@ -84,13 +84,13 @@ class DatabaseManager:
         with sqlite3.connect(self.local_db) as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT path FROM local_files WHERE hash = ?', (file_hash, ))
-            result = cursore.fetchone()
+            result = cursor.fetchone()
             return result[0] if result else None
 
     def add_device(self, device_id, ip):
         with sqlite3.connect(self.shared_db) as conn:
             cursor = conn.cursor()
-            cursore.execute("""
+            cursor.execute("""
                 INSERT INTO devices (device_id, ip, last_seen)
                 VALUES (?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET ip=?, last_seen=?
             """, (device_id, ip, int(time.time()), ip, int(time.time())))
