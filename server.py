@@ -1,4 +1,4 @@
-import socket, os, time, pathlib
+import socket, os, time, pathlib, hashlib
 from db import DatabaseManager
 
 class Server:
@@ -134,22 +134,22 @@ class DownloadDaemon:
                     print(f'Failed to notify {ip}: {e}')
             
     def monitoring(self):
-        last_mtime = os.path.getmtime("shared.db")
+        last_size = os.path.getsize("shared.db")
         while True:
             time.sleep(15)
 
             directories2check = self.dbm.get_local_directories()
-            for path in directories2check:        
+            for path in directories2check:
                 path = pathlib.Path(path).resolve()
                 for file in path.rglob('*'):
                     if file.is_file():
                         self.dbm.add_file(str(file))
 
-            current_mtime = os.path.getmtime("shared.db")
-            if current_mtime != last_mtime:
+            current_size = os.path.getsize("shared.db")
+            if current_size != last_size:
                 print("shared.db has changed, notifying devices...")
                 self.notify_devices()
-                last_mtime = current_mtime
+                last_size = current_size
 
             self.download_missing_files()
             
