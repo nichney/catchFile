@@ -134,7 +134,7 @@ class DownloadDaemon:
                     print(f'Failed to notify {ip}: {e}')
             
     def monitoring(self):
-        last_size = os.path.getsize("shared.db")
+        last_files = self.dbm.get_local_files()
         while True:
             time.sleep(15)
 
@@ -145,11 +145,11 @@ class DownloadDaemon:
                     if file.is_file():
                         self.dbm.add_file(str(file))
 
-            current_size = os.path.getsize("shared.db")
-            if current_size != last_size:
+            current_files = self.dbm.get_local_files()
+            if current_files != last_files:
                 print("shared.db has changed, notifying devices...")
                 self.notify_devices()
-                last_size = current_size
+                last_files = current_files
 
             self.download_missing_files()
             
