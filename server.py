@@ -36,16 +36,24 @@ class Server:
         server.listen(10)
         print("Waiting for incoming connection...")
         while True:
-
             conn, addr = server.accept()
-            print(f"Connected by {addr}, sending shared.db...")
-            self.dbm.add_device(addr) 
-
-            with open("shared.db", "rb") as f:
-                conn.sendfile(f)
-
-            conn.close()
-            print("Database sent successfully!")
+            print(f"Connected by {addr}")
+            self.dbm.add_device(addr[0]) 
+        
+            try:
+                message = conn.recv(1024).decode().strip()
+                if message == "DB_UPDATED":
+                    print(f"Received DB_UPDATED notification from {addr}, downloading new database...")
+                    self.download_shared_db(addr[0])
+                else:
+                    print(f"Sending shared.db to {addr}...")
+                    with open("shared.db", "rb") as f:
+                        conn.sendfile(f)
+                    print("Database sent successfully!")
+            except Exception as e:
+                print(f"Error handling request from {addr}: {e}")
+            finally:
+                conn.close()
 
     def download_shared_db(self, host):
         """Download shared.db"""
@@ -113,10 +121,21 @@ class DownloadDaemon:
             else:
                 print(f'File {file_hash} not found on any device')
 
-
+    def notify_devices(self):
+        shared_ips = self.dbm.get_known_ips()
+        for ip in shared_ips:
+            if ip != self.myip:  # Avoid notifying self
+                try:
+                    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    client.connect((ip, 65431))
+                    client.send(b'DB_UPDATED')
+                    client.close()
+                except Exception as e:
+                    print(f'Failed to notify {ip}: {e}')
+            
     def monitoring(self):
+        last_mtime = os.path.getmtime("shared.db")
         while True:
-            # TODO: monitor shared.db for changes, and if there is an update from external devices, download new db
             time.sleep(15)
 
             directories2check = self.dbm.get_local_directories()
@@ -125,6 +144,14 @@ class DownloadDaemon:
                 for file in path.rglob('*'):
                     if file.is_file():
                         self.dbm.add_file(str(file))
+
+            current_mtime = os.path.getmtime("shared.db")
+            if current_mtime != last_mtime:
+                print("shared.db has changed, notifying devices...")
+                self.notify_devices()
+                last_mtime = current_mtime
+
+            self.download_missing_files()
             
                 
 
