@@ -45,8 +45,9 @@ def connect2device():
         print(f'Failed to connect: {e}')
 
 def removeDirectory():
-    # TODO: stop syncing existing directory, but do not delete it
-    pass
+    path = Path(input('Enter a file path on your local device to stop syncing: ').strip()).resolve()
+    dbm = db.DatabaseManager()
+    dbm.unsync_file(str(path))
 
 def removeFiles():
     path = Path(input("Enter a directory path on your local device to remove it from sync: ").strip()).resolve()
