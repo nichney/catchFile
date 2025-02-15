@@ -2,6 +2,7 @@ from pathlib import Path # to resolve path
 import os
 import db #DataBase logic
 import link_resolver # for magnet links
+import server
 
 def addDirectory():
     path = Path(input("Enter a directory path on your local device: ").strip()).resolve()
@@ -27,9 +28,12 @@ def connect2device():
     try:
         link_data, key = link_resolver.MagnetLinkGenerator.decode_link(magnet_link)
         shared_db_hash = link_data['db_hash']
+        ip = link_data['ip']
 
         print(f'Connected to device! Shared DB hash: {shared_db_hash}')
         print(f'Encryption key (store securely!): {key.hex()}')
+        
+        download_shared_db(ip)
 
         dbm = db.DatabaseManager()
         missing_files = dbm.get_missing_files()
