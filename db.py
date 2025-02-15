@@ -99,7 +99,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute('SELECT path FROM directories')
             result = cursor.fetchall()
-            return [row[0] for row in result
+            return [row[0] for row in result]
 
     def get_file_path_by_hash(self, file_hash: str):
         with sqlite3.connect(self.local_db) as conn:
