@@ -15,7 +15,7 @@ def addDirectory():
 
 def addDevice():
     key = os.urandom(32) 
-    generator = MagnetLinkGenerator()
+    generator = link_resolver.MagnetLinkGenerator()
     magnet_link = generator.generate_magnet_link(key)
 
     print("Magnet-link:", magnet_link)
@@ -25,7 +25,7 @@ def connect2device():
     magnet_link = input("Enter link to connect device: ").strip()
 
     try:
-        link_data, key = MagnetLinkGenerator.decode_link(magnet_link)
+        link_data, key = link_resolver.MagnetLinkGenerator.decode_link(magnet_link)
         shared_db_hash = link_data['db_hash']
 
         print(f'Connected to device! Shared DB hash: {shared_db_hash}')
