@@ -40,7 +40,7 @@ def connect2device():
 
         dbm = db.DatabaseManager()
         dbm.add_device(ip)
-        server.DownloadDaemon.download_missing_files()
+        server.DownloadDaemon().download_missing_files()
     except Exception as e:
         print(f'Failed to connect: {e}')
 

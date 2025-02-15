@@ -59,6 +59,7 @@ class Server:
         """Download shared.db"""
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.connect((host, 65431))
+        client.send(b'DB_NOT_UPDATED')
 
         with open("shared.db", "wb") as f:
             while chunk := client.recv(4096):
