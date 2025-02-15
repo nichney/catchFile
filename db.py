@@ -27,8 +27,7 @@ class DatabaseManager:
             """)
             cursor.execute("""
                     CREATE TABLE IF NOT EXISTS devices (
-                        device_id TEXT PRIMARY KEY,
-                        ip TEXT NOT NULL, 
+                        ip TEXT PRIMARY KEY, 
                         last_seen INTEGER
                     )
             """)
@@ -87,13 +86,13 @@ class DatabaseManager:
             result = cursor.fetchone()
             return result[0] if result else None
 
-    def add_device(self, device_id, ip):
+    def add_device(self, ip):
         with sqlite3.connect(self.shared_db) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO devices (device_id, ip, last_seen)
-                VALUES (?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET ip=?, last_seen=?
-            """, (device_id, ip, int(time.time()), ip, int(time.time())))
+                VALUES (?, ?) ON CONFLICT(ip) DO UPDATE SET last_seen=?
+            """, (ip, int(time.time()), int(time.time())))
             conn.commit()
 
     def remove_file(self, file_hash: str):
