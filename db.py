@@ -1,18 +1,55 @@
-# DataBase logic, using MongoDB
+# DataBase logic, using SQLite
 
-from pymongo import MongoClient
+import sqlite3
 from pathlib import Path
 import hashlib
 import time
 
 class DatabaseManager:
-    def __init__(self, dbname="catchfile", host="localhost", port=27017):
-        self.client = MongoClient(host, port)
-        self.db = self.client[dbname]
-        self.shared_files = self.db.shared_files
-        self.devices = self.db.devices
-        self.local_files = self.db.local_files
-        self.directories = self.db.directories
+    def __init__(self, shared_db="shared.db", local_db="local.db"):
+        self.shared_db = shared_db
+        self.local_db = local_db
+        self._init_shared_db()
+        self._init_local_db()
+
+    def _init_shared_db(self):
+        """Create shared DB if not exists"""
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS files (
+                    hash TEXT PRIMARY KEY,
+                    filename TEXT NOT NULL,
+                    size INTEGER,
+                    last_modified INTEGER,
+                    deleted BOOLEAN DEFAULT 0
+                )
+            """)
+            cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS devices (
+                        ip TEXT PRIMARY KEY, 
+                        last_seen INTEGER
+                    )
+            """)
+            conn.commit()
+
+    def _init_local_db(self):
+        """Create local DB if not exists"""
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS local_files (
+                    hash TEXT PRIMARY KEY,
+                    path TEXT NOT NULL,
+                    ignored BOOLEAN DEFAULT 0
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS directories (
+                    path TEXT PRIMARY KEY
+                )
+            """)
+            conn.commit()
 
     def _calculate_file_hash(self, file_path, chunk_size=65536):
         # SHA-256
@@ -20,92 +57,118 @@ class DatabaseManager:
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(chunk_size), b''):
                 hasher.update(chunk)
-        return hasher.hexdigest()
+        return hasher.hexdigest()   
 
     def add_directory(self, dir_path: str):
-        self.directories.update_one(
-            {"path": dir_path},
-            {"$set": {"path": dir_path}},
-            upsert=True
-        )
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO directories (path )
+                VALUES (?)
+            """, (dir_path, ))
+            conn.commit()
+
 
     def add_file(self, file_path: str):
         """Add file to both DB"""
         file_path = Path(file_path).resolve()
         if not file_path.exists() or not file_path.is_file():
-            raise ValueError("File does not exist")
+            raise ValueError("File does not exists")
         file_size = file_path.stat().st_size
         last_modified = int(file_path.stat().st_mtime)
-        file_hash = self._calculate_file_hash(file_path)
+        file_hash =  self._calculate_file_hash(file_path)
 
-        self.shared_files.update_one(
-            {"hash": file_hash},
-            {"$set": {
-                "hash": file_hash,
-                "filename": file_path.name,
-                "size": file_size,
-                "last_modified": last_modified,
-                "deleted": False
-            }},
-            upsert=True
-        )
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO files (hash, filename, size, last_modified, deleted)
+                VALUES (?, ?, ?, ?, 0)
+            """, (file_hash, file_path.name, file_size, last_modified))
+            conn.commit()
 
-        self.local_files.update_one(
-            {"hash": file_hash},
-            {"$set": {
-                "hash": file_hash,
-                "path": str(file_path),
-                "ignored": False
-            }},
-            upsert=True
-        )
-
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO local_files (hash, path, ignored)
+                VALUES (?, ?, 0)
+            """, (file_hash, str(file_path)))
+            conn.commit()
+    
     def get_local_directories(self):
-        return [d["path"] for d in self.directories.find()]
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT path FROM directories')
+            result = cursor.fetchall()
+            return [row[0] for row in result]
 
     def get_file_path_by_hash(self, file_hash: str):
-        file = self.local_files.find_one({"hash": file_hash})
-        return file["path"] if file else None
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT path FROM local_files WHERE hash = ?', (file_hash, ))
+            result = cursor.fetchone()
+            return result[0] if result else None
+    def get_file_hash_by_path(self, file_path: str):
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT hash FROM local_files WHERE path = ?', (file_path, ))
+            result = cursor.fetchone()
+            return result[0] if result else None
 
     def add_device(self, ip):
-        self.devices.update_one(
-            {"ip": ip},
-            {"$set": {
-                "ip": ip,
-                "last_seen": int(time.time())
-            }},
-            upsert=True
-        )
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO devices (ip, last_seen)
+                VALUES (?, ?) ON CONFLICT(ip) DO UPDATE SET last_seen=?
+            """, (ip, int(time.time()), int(time.time())))
+            conn.commit()
 
     def remove_file(self, file_hash: str):
         """Mark file in DB as deleted"""
-        self.shared_files.update_one(
-            {"hash": file_hash},
-            {"$set": {"deleted": True}}
-        )
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE files SET deleted = 1 WHERE hash = ?", (file_hash,))
+            conn.commit()
 
     def unsync_file(self, file_path: str):
         """Stop syncing file"""
         file_path = Path(file_path).resolve()
         if not file_path.exists() or not file_path.is_file():
-            raise ValueError("File does not exist")
-        file_hash = self._calculate_file_hash(file_path)
+            raise ValueError("File does not exist") 
+        file_hash =  self._calculate_file_hash(file_path)
 
-        self.local_files.update_one(
-            {"hash": file_hash},
-            {"$set": {"ignored": True}}
-        )
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE local_files SET ignored = 1 WHERE hash LIKE ?
+            """, (file_hash,))
+            conn.commit()
 
     def get_missing_files(self):
         """List of missing files"""
-        shared_files = {f["hash"] for f in self.shared_files.find({"deleted": False})}
-        local_files = {f["hash"] for f in self.local_files.find({"ignored": False})}
-        return list(shared_files - local_files)
+        with sqlite3.connect(self.shared_db) as shared_conn, sqlite3.connect(self.local_db) as local_conn:
+            shared_cursor = shared_conn.cursor()
+            local_cursor = local_conn.cursor()
+
+            shared_cursor.execute("SELECT hash FROM files WHERE deleted = 0")
+            shared_files = {row[0] for row in shared_cursor.fetchall()}
+
+            local_cursor.execute("SELECT hash FROM local_files WHERE ignored = 0")
+            local_files = {row[0] for row in local_cursor.fetchall()}
+
+            return list(shared_files - local_files)
 
     def get_local_files(self):
         """List of local files"""
-        return list(self.local_files.find())
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM local_files")
+            return cursor.fetchall()
 
     def get_known_ips(self):
         """Retrieve a list of known IP addresses from the devices table."""
-        return [d["ip"] for d in self.devices.find()]
+        with sqlite3.connect(self.shared_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT ip FROM devices")
+            result = cursor.fetchall()
+            return [row[0] for row in result]
