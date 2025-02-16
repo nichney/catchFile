@@ -1,4 +1,4 @@
 example/*
 __pycache__/*
-*.db
+*.db*
 *.log
