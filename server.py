@@ -9,6 +9,7 @@ logger = Logger().get_logger()
 class Server:
     def __init__(self):
         self.dbm = DatabaseManager()
+        self.myip = DownloadDaemon().get_local_ip()
         
 
     def start_file_server(self):
@@ -63,6 +64,9 @@ class Server:
             try:
                 conn, addr = server.accept()
                 conn.settimeout(10)
+                if addr[0] == self.myip:
+                    logger.info(f'Recieved signal from self, ignoring...')
+                    continue
                 logger.info(f'Connected by {addr}')
                 self.dbm.add_device(str(addr[0])) 
             except socket.timeout:
@@ -191,15 +195,16 @@ class DownloadDaemon:
     def notify_devices(self):
         shared_ips = self.dbm.get_known_ips()
         for ip in shared_ips:
-            if ip != self.myip:  # Avoid notifying self
-                try:
-                    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    client.settimeout(10)
-                    client.connect((ip, 65431))
-                    client.send(b'DB_UPDATED')
-                    client.close()
-                except Exception as e:
-                    logger.error(f'Failed to notify {ip}: {e}')
+            if ip == self.myip:
+                continue
+            try:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.settimeout(10)
+                client.connect((ip, 65431))
+                client.send(b'DB_UPDATED')
+                client.close()
+            except Exception as e:
+                logger.error(f'Failed to notify {ip}: {e}')
             
     def monitoring(self):
         '''Uses watchdog to monitor file system changes dynamically.'''
