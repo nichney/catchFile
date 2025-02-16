@@ -20,7 +20,7 @@ class DatabaseManager:
         '''Create shared DB if not exists'''
         try:
             with sqlite3.connect(self.shared_db) as conn:
-                self._enable_wal_mode(conn)
+                #self._enable_wal_mode(conn)
                 cursor = conn.cursor()
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS files (
@@ -50,7 +50,7 @@ class DatabaseManager:
         '''Create local DB if not exists'''
         try:
             with sqlite3.connect(self.local_db) as conn:
-                self._enable_wal_mode(conn)
+                #self._enable_wal_mode(conn)
                 cursor = conn.cursor()
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS local_files (
