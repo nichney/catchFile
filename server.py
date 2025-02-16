@@ -62,7 +62,7 @@ class Server:
                 conn, addr = server.accept()
                 conn.settimeout(10)
                 logger.info(f'Connected by {addr}')
-                self.dbm.add_device(addr[0]) 
+                self.dbm.add_device(str(addr[0])) 
             except socket.timeout:
                 logger.info('Server accept timeout, continue...')
                 continue
@@ -100,7 +100,8 @@ class Server:
                 while chunk := client.recv(4096):
                     f.write(chunk)
 
-            logger.info('Shared database downloaded!')
+            logger.info('Shared database downloaded! Recieving missing files...')
+            DownloadDaemon().download_missing_files()
         except socket.timeout:
             logger.info(f'Connection to {host} timed out!')
         except Exception as e:
@@ -113,7 +114,7 @@ class DownloadDaemon:
         self.dbm = DatabaseManager()
         self.myip = self.get_local_ip()
         self.s = Server()
-        self.dbm.add_device(self.myip)
+        #self.dbm.add_device(self.myip)
         self.db_lock = threading.Lock()
 
     def get_local_ip(self):
