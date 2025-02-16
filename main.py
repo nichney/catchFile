@@ -47,24 +47,31 @@ def connect2device():
         logger.error(f'Failed to connect: {e}')
 
 def removeDirectory():
-    path = Path(input('Enter a file path on your local device to stop syncing: ').strip()).resolve()
-    dbm = db.DatabaseManager()
-    dbm.unsync_file(str(path))
-
-def removeFiles():
+    '''UNSYNC FILES FROM DIRECTORY'''
     path = Path(input('Enter a directory path on your local device to remove it from sync: ').strip()).resolve()
     dbm = db.DatabaseManager()
+    dbm.remove_directory(str(path))
     for file in path.rglob('*'):
         if file.is_file():
             dbm.unsync_file(str(file))
             logger.info(f'File {file} uncynsed now')
+
+def removeFiles():
+    '''DELETE FILE EVERYWHERE'''
+    path = Path(input('Enter a file path on your local device to delete it on synced devices: ').strip()).resolve()
+    dbm = db.DatabaseManager()
+    file_hash = dbm.get_file_hash_by_path(str(path))
+    dbm.remove_file(file_hash)
+    dbm.remove_file_by_hash(file_hash)
+    os.remove(str(path))
+    server.DownloadDaemon().notify_devices()
 
 if __name__ == '__main__':
     threading.Thread(target=server.Server().start_db_server, daemon=True).start()
     logger.info('Database sharing server started')
     threading.Thread(target=server.Server().start_file_server, daemon=True).start()
     logger.info('File sharing server started')
-    threading.Thread(target=server.DownloadDaemon().monitoring, daemon=True).start()
+    #threading.Thread(target=server.DownloadDaemon().monitoring, daemon=True).start()
     logger.info('Monitoring demon started')
 
     while True:

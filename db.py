@@ -142,6 +142,22 @@ class DatabaseManager:
             conn.commit()
             logger.info(f'File with hash {file_hash} marked as deleted in shared database')
 
+    def remove_directory(self, dir_path: str):
+        '''Remove directory from local DB by path'''
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM directories WHERE path = ?', (dir_path,))
+            conn.commit()
+        logger.info(f'Directory {dir_path} removed from local database')
+
+    def remove_file_by_hash(self, file_hash: str):
+        '''Remove file from local DB by hash'''
+        with sqlite3.connect(self.local_db) as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM local_files WHERE hash = ?', (file_hash,))
+            conn.commit()
+        logger.info(f'File with hash {file_hash} removed from local database')
+
     def unsync_file(self, file_path: str):
         '''Stop syncing file'''
         file_path = Path(file_path).resolve()
