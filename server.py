@@ -1,6 +1,8 @@
 import socket, os, time, pathlib, hashlib, threading
 from db import DatabaseManager
 from log import Logger
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 logger = Logger().get_logger()
 
@@ -117,6 +119,7 @@ class DownloadDaemon:
         self.s = Server()
         self.dbm.add_device(self.myip)
         self.db_lock = threading.Lock()
+        self.observer = Observer()
 
     def get_local_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -190,6 +193,7 @@ class DownloadDaemon:
             if ip != self.myip:  # Avoid notifying self
                 try:
                     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    client.settimeout(10)
                     client.connect((ip, 65431))
                     client.send(b'DB_UPDATED')
                     client.close()
@@ -197,44 +201,62 @@ class DownloadDaemon:
                     logger.error(f'Failed to notify {ip}: {e}')
             
     def monitoring(self):
+        '''Uses watchdog to monitor file system changes dynamically.'''
+        logger.info("Starting real-time file monitoring...")
+
         with self.db_lock:
-            last_files_paths = [row[1] for row in self.dbm.get_local_files()]
-        while True:
-            time.sleep(15)
+            directories_to_watch = self.dbm.get_local_directories()
 
-            # File in base, but not in directory
-            for path in last_files_paths:
-                path = pathlib.Path(path).resolve()
-                if not path.exists():
-                    logger.info(f'{path} is missing!')
-                    with self.db_lock:
-                        shared_ips = self.dbm.get_known_ips()
-                        file_hash = self.dbm.get_file_hash_by_path(str(path))
-                    for ip in shared_ips:
-                        logger.info(f'Requesting {file_hash} from {ip}')
-                        if self.download_file_from_peer(ip, file_hash):
-                            logger.info(f'File {file_hash} downloaded!')
-                            break
-                    else:
-                        logger.info(f'File {file_hash} not found on any device')
+        event_handler = FileChangeHandler(self)
+        for directory in directories_to_watch:
+            path = pathlib.Path(directory).resolve()
+            logger.info(f"Monitoring directory: {path}")
+            self.observer.schedule(event_handler, str(path), recursive=True)
 
-            # File in directory, but not in base
-            with self.db_lock:
-                directories2check = self.dbm.get_local_directories()
-            for path in directories2check:
-                logger.info(f'Checking {path} directory for updates')
-                path = pathlib.Path(path).resolve()
-                for file in path.rglob('*'):
-                    if file not in last_files_paths and file.is_file():
-                        with self.db_lock:
-                            self.dbm.add_file(str(file))  # here we add new file to DB
+        self.observer.start()
 
-            with self.db_lock:
-                current_files = [row[1] for row in self.dbm.get_local_files()]
-            if current_files != last_files_paths:
-                logger.info('shared.db has changed, notifying devices...')
-                self.notify_devices()
-                last_files_paths = current_files
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            self.observer.stop()
+            logger.info("Stopping file monitoring...")
 
-            self.download_missing_files()
-        pass
+        self.observer.join()
+
+class FileChangeHandler(FileSystemEventHandler):
+    def __init__(self, daemon):
+        self.daemon = daemon 
+
+    def on_created(self, event):
+        """Handles new file creation."""
+        if event.is_directory:
+            return
+        file_path = pathlib.Path(event.src_path).resolve()
+        logger.info(f"New file detected: {file_path}")
+        with self.daemon.db_lock:
+            self.daemon.dbm.add_file(str(file_path))
+        self.daemon.notify_devices()
+
+    def on_deleted(self, event):
+        """Handles file deletions."""
+        if event.is_directory:
+            return
+        file_path = pathlib.Path(event.src_path).resolve()
+        logger.info(f"File deleted: {file_path}")
+        with self.daemon.db_lock:
+            file_hash = self.daemon.dbm.get_file_hash_by_path(str(file_path))
+            if file_hash:
+                self.daemon.dbm.remove_file_by_hash(file_hash)
+        self.daemon.notify_devices()
+
+    def on_modified(self, event):
+        """Handles file modifications (if needed)."""
+        if event.is_directory:
+            return
+        file_path = pathlib.Path(event.src_path).resolve()
+        logger.info(f"File modified: {file_path}")
+        # Optionally, update hash if needed
+        with self.daemon.db_lock:
+            self.daemon.dbm.add_file(str(file_path))
+        self.daemon.notify_devices()

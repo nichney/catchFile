@@ -86,7 +86,7 @@ if __name__ == '__main__':
     logger.info('Database sharing server started')
     threading.Thread(target=server.Server().start_file_server, daemon=True).start()
     logger.info('File sharing server started')
-    #threading.Thread(target=server.DownloadDaemon().monitoring, daemon=True).start()
+    threading.Thread(target=server.DownloadDaemon().monitoring, daemon=True).start()
     logger.info('Monitoring demon started')
 
     while True:
