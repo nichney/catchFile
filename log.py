@@ -1,3 +1,4 @@
+# Copyright (C) 2025 Kirill Osmolovsky
 import logging
 from logging.handlers import RotatingFileHandler
 

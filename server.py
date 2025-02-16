@@ -1,3 +1,4 @@
+# Copyright (C) 2025 Kirill Osmolovsky
 import socket, os, time, pathlib, hashlib, threading
 from db import DatabaseManager
 from log import Logger

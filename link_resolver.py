@@ -1,5 +1,5 @@
 # Resolve magnet links
-
+# Copyright (C) 2025 Kirill Osmolovsky
 import base64, json, uuid, os, hashlib, socket
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import server

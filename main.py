@@ -1,3 +1,4 @@
+# Copyright (C) 2025 Kirill Osmolovsky
 from pathlib import Path # to resolve path
 import os, threading, socket
 import db #DataBase logic

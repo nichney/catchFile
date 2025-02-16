@@ -1,5 +1,5 @@
 # DataBase logic, using SQLite
-
+# Copyright (C) 2025 Kirill Osmolovsky
 import sqlite3
 from pathlib import Path
 import hashlib
