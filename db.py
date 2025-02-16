@@ -234,7 +234,7 @@ class DatabaseManager:
 
 
     def get_missing_files(self):
-        '''List of missing files'''
+        '''List of missing files hashes'''
         try:
             with sqlite3.connect(self.shared_db) as shared_conn, sqlite3.connect(self.local_db) as local_conn:
                 shared_cursor = shared_conn.cursor()
@@ -248,6 +248,17 @@ class DatabaseManager:
                 return list(shared_files - local_files)
         except sqlite3.Error as e:
             logger.error(f'Database error while getting missing files: {e}')
+
+    def get_deleted_files(self):
+        '''Get hashes of files marked as deleted'''
+        try:
+            with sqlite3.connect(self.shared_db) as shared_conn:
+                shared_cursor = shared_conn.cursor()
+                shared_cursor.execute('SELECT hash FROM files WHERE deleted = 1')
+                shared_files = {row[0] for row in shared_cursor.fetchall()}
+                return list(shared_files)
+        except sqlite3.Error as e:
+            logger.error(f'Database error while getting deleted files: {e}')
 
     def get_local_files(self):
         '''List of local files'''

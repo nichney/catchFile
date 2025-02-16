@@ -102,6 +102,7 @@ class Server:
 
             logger.info('Shared database downloaded! Recieving missing files...')
             DownloadDaemon().download_missing_files()
+            DownloadDaemon().delete_marked_files()
         except socket.timeout:
             logger.info(f'Connection to {host} timed out!')
         except Exception as e:
@@ -114,7 +115,7 @@ class DownloadDaemon:
         self.dbm = DatabaseManager()
         self.myip = self.get_local_ip()
         self.s = Server()
-        #self.dbm.add_device(self.myip)
+        self.dbm.add_device(self.myip)
         self.db_lock = threading.Lock()
 
     def get_local_ip(self):
@@ -169,6 +170,19 @@ class DownloadDaemon:
                     break
             else:
                 logger.info(f'File {file_hash} not found on any device')
+
+    def delete_marked_files(self):
+        marked_files_hashes = self.dbm.get_deleted_files()
+        marked_files_paths = [self.dbm.get_file_path_by_hash(i) for i in marked_files_hashes]
+        if not marked_files_paths:
+            logger.info('No deleted files found')
+            return
+        for file in marked_files_paths:
+            try:
+                self.dbm.remove_file_by_hash(self.dbm.get_file_hash_by_path(file)) # too sophisticated
+                os.remove(file)
+            except FileNotFoundError:
+                logger.info('File already deleted')
 
     def notify_devices(self):
         shared_ips = self.dbm.get_known_ips()
