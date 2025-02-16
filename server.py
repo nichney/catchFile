@@ -116,6 +116,7 @@ class DownloadDaemon:
     def __init__(self):
         self.dbm = DatabaseManager()
         self.myip = self.get_local_ip()
+        logger.info(f'MY IP IS {self.myip}')
         self.s = Server()
         self.dbm.add_device(self.myip)
         self.db_lock = threading.Lock()
@@ -202,6 +203,8 @@ class DownloadDaemon:
             
     def monitoring(self):
         '''Uses watchdog to monitor file system changes dynamically.'''
+        self.download_missing_files()
+        self.delete_marked_files()
         logger.info("Starting real-time file monitoring...")
 
         with self.db_lock:
