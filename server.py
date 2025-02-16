@@ -1,73 +1,76 @@
 import socket, os, time, pathlib, hashlib, threading
 from db import DatabaseManager
+from log import Logger
+
+logger = Logger().get_logger()
 
 class Server:
     def __init__(self):
         self.dbm = DatabaseManager()
+        
 
     def start_file_server(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.bind(("0.0.0.0", 65432))
+        server.bind(('0.0.0.0', 65432))
         server.listen(10)
-        print("File server started...")
+        logger.info('File server started...')
 
         while True:
             conn, addr = server.accept()
-            print(f"Connected by {addr}")
+            logger.info(f'Connected by {addr}')
 
             file_hash = conn.recv(64).decode().strip()
             file_path = self.dbm.get_file_path_by_hash(file_hash)
 
             if file_path and os.path.exists(file_path):
-                print(f"Sending file {file_path}")
-                conn.send(b"OK")
-                with open(file_path, "rb") as f:
+                logger.info(f'Sending file {file_path}')
+                conn.send(b'OK')
+                with open(file_path, 'rb') as f:
                     conn.sendfile(f)
             else:
-                print(f"File {file_hash} not found!")
-                conn.send(b"NOT_FOUND")
+                logger.info(f'File {file_hash} not found!')
+                conn.send(b'NOT_FOUND')
 
             conn.close()
 
     def start_db_server(self):
-        """Open server to share shared.db"""
+        '''Open server to share shared.db'''
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.bind(("0.0.0.0", 65431))
+        server.bind(('0.0.0.0', 65431))
         server.listen(10)
-        print("Waiting for incoming connection...")
+        logger.info('Waiting for incoming connection...')
         while True:
             conn, addr = server.accept()
-            print(f"Connected by {addr}")
+            logger.info(f'Connected by {addr}')
             self.dbm.add_device(addr[0]) 
         
             try:
                 message = conn.recv(1024).decode().strip()
-                if message == "DB_UPDATED":
-                    print(f"Received DB_UPDATED notification from {addr}, downloading new database...")
+                if message == 'DB_UPDATED':
+                    logger.info(f'Received DB_UPDATED notification from {addr}, downloading new database...')
                     self.download_shared_db(addr[0])
                 else:
-                    print(f"Sending shared.db to {addr}...")
-                    with open("shared.db", "rb") as f:
+                    logger.info(f'Sending shared.db to {addr}...')
+                    with open('shared.db', 'rb') as f:
                         conn.sendfile(f)
-                    print("Database sent successfully!")
+                    logger.info('Database sent successfully!')
             except Exception as e:
-                print(f"Error handling request from {addr}: {e}")
+                logger.error(f'Error handling request from {addr}: {e}')
             finally:
                 conn.close()
 
     def download_shared_db(self, host):
-        """Download shared.db"""
+        '''Download shared.db'''
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.connect((host, 65431))
         client.send(b'DB_NOT_UPDATED')
 
-        with open("shared.db", "wb") as f:
+        with open('shared.db', 'wb') as f:
             while chunk := client.recv(4096):
                 f.write(chunk)
 
         client.close()
-        print("Shared database downloaded!")
-
+        logger.info('Shared database downloaded!')
 
 class DownloadDaemon:
     def __init__(self):
@@ -102,28 +105,28 @@ class DownloadDaemon:
                 self.dbm.add_file(file_path)
                 return True
             else:
-                print(f'File {file_hash} not found on {host}')
+                logger.info(f'File {file_hash} not found on {host}')
                 client.close()
                 return False
         except Exception as e:
-            print(f'Failed to download {file_hash} from {host}: {e}')
+            logger.error(f'Failed to download {file_hash} from {host}: {e}')
             return False
     
     def download_missing_files(self):
         missing_files = self.dbm.get_missing_files()
         if not missing_files:
-            print('No missing files found')
+            logger.info('No missing files found')
             return
         shared_ips = self.dbm.get_known_ips()
 
         for file_hash in missing_files:
             for ip in shared_ips:
-                print(f'Requesting {file_hash} from {ip}')
+                logger.info(f'Requesting {file_hash} from {ip}')
                 if self.download_file_from_peer(ip, file_hash):
-                    print(f'File {file_hash} downloaded!')
+                    logger.info(f'File {file_hash} downloaded!')
                     break
             else:
-                print(f'File {file_hash} not found on any device')
+                logger.info(f'File {file_hash} not found on any device')
 
     def notify_devices(self):
         shared_ips = self.dbm.get_known_ips()
@@ -135,50 +138,47 @@ class DownloadDaemon:
                     client.send(b'DB_UPDATED')
                     client.close()
                 except Exception as e:
-                    print(f'Failed to notify {ip}: {e}')
+                    logger.error(f'Failed to notify {ip}: {e}')
             
     def monitoring(self):
         with self.db_lock:
-            last_files_paths = [ row[1] for row in self.dbm.get_local_files()]
+            last_files_paths = [row[1] for row in self.dbm.get_local_files()]
         while True:
             time.sleep(15)
 
             # File in base, but not in directory
             for path in last_files_paths:
-                print(f'Checking {path} directory for missings')
                 path = pathlib.Path(path).resolve()
                 if not path.exists():
-                    print(f'{path} is missing!')
+                    logger.info(f'{path} is missing!')
                     with self.db_lock:
                         shared_ips = self.dbm.get_known_ips()
                         file_hash = self.dbm.get_file_hash_by_path(str(path))
                     for ip in shared_ips:
-                        print(f'Requesting {file_hash} from {ip}')
+                        logger.info(f'Requesting {file_hash} from {ip}')
                         if self.download_file_from_peer(ip, file_hash):
-                            print(f'File {file_hash} downloaded!')
+                            logger.info(f'File {file_hash} downloaded!')
                             break
                     else:
-                        print(f'File {file_hash} not found on any device')
+                        logger.info(f'File {file_hash} not found on any device')
 
             # File in directory, but not in base
             with self.db_lock:
                 directories2check = self.dbm.get_local_directories()
             for path in directories2check:
-                print(f'Checking {path} directory for updates')
+                logger.info(f'Checking {path} directory for updates')
                 path = pathlib.Path(path).resolve()
                 for file in path.rglob('*'):
                     if file not in last_files_paths and file.is_file():
                         with self.db_lock:
-                            self.dbm.add_file(str(file)) # here we add new file to DB
+                            self.dbm.add_file(str(file))  # here we add new file to DB
 
             with self.db_lock:
-                current_files = [ row[1] for row in self.dbm.get_local_files()]
+                current_files = [row[1] for row in self.dbm.get_local_files()]
             if current_files != last_files_paths:
-                print("shared.db has changed, notifying devices...")
+                logger.info('shared.db has changed, notifying devices...')
                 self.notify_devices()
                 last_files_paths = current_files
 
             self.download_missing_files()
-        pass 
-                
-
+        pass
