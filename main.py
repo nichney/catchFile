@@ -8,6 +8,9 @@ logger = log.Logger().get_logger()
 
 def addDirectory():
     path = Path(input('Enter a directory path on your local device: ').strip()).resolve()
+    if not path.is_dir() or not path.exists():
+        logger.error(f'{path} doesn\'t exists or not a directory')
+        return
     
     dbm = db.DatabaseManager()
     for file in path.rglob('*'):
@@ -31,20 +34,32 @@ def connect2device():
 
     try:
         link_data, key = link_resolver.MagnetLinkGenerator.decode_link(magnet_link)
-        shared_db_hash = link_data['db_hash']
-        ip = link_data['ip']
-        s = server.Server()
-
-        logger.info(f'Connected to device! Shared DB hash: {shared_db_hash}')
-        logger.info(f'Encryption key (store securely!): {key.hex()}')
-        
-        s.download_shared_db(ip)
-
-        dbm = db.DatabaseManager()
-        dbm.add_device(ip)
-        server.DownloadDaemon().download_missing_files()
     except Exception as e:
-        logger.error(f'Failed to connect: {e}')
+        logger.error(f'Invalid magnet link: {e}')
+        return
+
+    shared_db_hash = link_data['db_hash']
+    ip = link_data['ip']
+    if not shared_db_hash or not ip:
+        logger.error(f'Magnet link {magnet_link} missing for some information')
+        return
+
+    s = server.Server()
+
+    logger.info(f'Connected to device! Shared DB hash: {shared_db_hash}')
+    logger.info(f'Encryption key (store securely!): {key.hex()}')
+    try:
+        s.download_shared_db(ip)
+    except socket.timeout:
+        logger.info(f"Connection to {ip} timed out!")
+        return
+    except Exception as e:
+        logger.info(f"Failed to download shared DB: {e}")
+        return
+
+    dbm = db.DatabaseManager()
+    dbm.add_device(ip)
+    server.DownloadDaemon().download_missing_files()
 
 def removeDirectory():
     '''UNSYNC FILES FROM DIRECTORY'''
