@@ -257,6 +257,7 @@ class FileChangeHandler(FileSystemEventHandler):
             file_hash = self.daemon.dbm.get_file_hash_by_path(str(file_path))
             if file_hash:
                 self.daemon.dbm.remove_file_by_hash(file_hash)
+                self.daemon.dbm.remove_file(file_hash)
         self.daemon.notify_devices()
 
     def on_modified(self, event):
