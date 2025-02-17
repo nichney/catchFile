@@ -44,6 +44,8 @@ class Server:
                     conn.send(b'OK')
                     with open(file_path, 'rb') as f:
                         conn.sendfile(f)
+                    logger.info('File sent')
+                    conn.close()
                 else:
                     logger.info(f'File {file_hash} not found!')
                     conn.send(b'NOT_FOUND')
