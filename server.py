@@ -192,6 +192,8 @@ class DownloadDaemon:
                 os.remove(file)
             except FileNotFoundError:
                 logger.info('File already deleted')
+            except TypeError as e:
+                logger.error(f'Error {e}')
 
     def notify_devices(self):
         shared_ips = self.dbm.get_known_ips()
@@ -226,7 +228,8 @@ class DownloadDaemon:
 
         try:
             while True:
-                time.sleep(1)
+                time.sleep(10)
+                #self.download_missing_files()
         except KeyboardInterrupt:
             self.observer.stop()
             logger.info("Stopping file monitoring...")
@@ -243,9 +246,12 @@ class FileChangeHandler(FileSystemEventHandler):
             return
         file_path = pathlib.Path(event.src_path).resolve()
         logger.info(f"New file detected: {file_path}")
-        with self.daemon.db_lock:
-            self.daemon.dbm.add_file(str(file_path))
-        self.daemon.notify_devices()
+        try:
+            with self.daemon.db_lock:
+                self.daemon.dbm.add_file(str(file_path))
+            self.daemon.notify_devices()
+        except ValueError:
+            logger.error(f'Error while adding created file {file_path}, possible temporary file')
 
     def on_deleted(self, event):
         """Handles file deletions."""
@@ -266,7 +272,9 @@ class FileChangeHandler(FileSystemEventHandler):
             return
         file_path = pathlib.Path(event.src_path).resolve()
         logger.info(f"File modified: {file_path}")
-        # Optionally, update hash if needed
-        with self.daemon.db_lock:
-            self.daemon.dbm.add_file(str(file_path))
-        self.daemon.notify_devices()
+        try:
+            with self.daemon.db_lock:
+                self.daemon.dbm.update_file_hash(str(file_path))
+            self.daemon.notify_devices()
+        except FileNotFoundError:
+            logger.error(f'Error while modifying hash of file {file_path}, possible temporary file')

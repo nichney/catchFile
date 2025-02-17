@@ -154,6 +154,42 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.error(f'Database error while retrieving file path by hash: {e}')
 
+    def update_file_hash(self, file_path: str):
+        '''Mark old hash as deleted in shared.db and insert new entry, update local hash'''
+        file_path = Path(file_path).resolve()
+        new_file_hash = self._calculate_file_hash(file_path)
+        last_modified = int(file_path.stat().st_mtime)
+        file_size = file_path.stat().st_size
+
+        try:
+            with sqlite3.connect(self.local_db) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE local_files 
+                    SET hash = ? 
+                    WHERE path = ?
+                ''', (new_file_hash, str(file_path)))
+                conn.commit()
+        
+            with sqlite3.connect(self.shared_db) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE files 
+                    SET deleted = 1 
+                    WHERE filename = ?
+                ''', (file_path.name,))
+            
+                cursor.execute('''
+                    INSERT INTO files (hash, filename, size, last_modified, deleted) 
+                    VALUES (?, ?, ?, ?, 0)
+                ''', (new_file_hash, file_path.name, file_size, last_modified))
+                conn.commit()
+
+            logger.info(f'Updated hash for {file_path} in local database and added new entry to shared database')
+
+        except sqlite3.Error as e:
+            logger.error(f'Database error while updating file hash: {e}')
+
     def get_file_hash_by_path(self, file_path: str):
         '''Get file hash by path from local database'''
         try:
