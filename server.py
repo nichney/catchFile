@@ -228,7 +228,7 @@ class DownloadDaemon:
 
         try:
             while True:
-                time.sleep(10)
+                time.sleep(1)
                 #self.download_missing_files()
         except KeyboardInterrupt:
             self.observer.stop()
@@ -275,6 +275,6 @@ class FileChangeHandler(FileSystemEventHandler):
         try:
             with self.daemon.db_lock:
                 self.daemon.dbm.update_file_hash(str(file_path))
-            self.daemon.notify_devices()
+            #self.daemon.notify_devices()
         except FileNotFoundError:
             logger.error(f'Error while modifying hash of file {file_path}, possible temporary file')
