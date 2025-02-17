@@ -55,7 +55,7 @@ def connect2device():
         for p in s.dbm.get_local_directories():
             p = Path(p)
             for file in p.rglob('*'):
-                dbm.add_file(str(file))
+                s.dbm.add_file(str(file))
         server.DownloadDaemon().notify_devices()
     except socket.timeout:
         logger.info(f"Connection to {ip} timed out!")
