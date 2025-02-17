@@ -171,7 +171,7 @@ class DownloadDaemon:
             with open(file_path, 'wb') as f:
                 while chunk := client.recv(4096):
                     f.write(chunk)
-            self.dbm.add_file(file_path)
+            self.dbm.add_file(str(file_path))
             return True
         except socket.timeout:
             logger.error(f'Connection to {host} timed out!')
