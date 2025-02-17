@@ -52,6 +52,11 @@ def connect2device():
     logger.info(f'Encryption key (store securely!): {key.hex()}')
     try:
         s.download_shared_db(ip)
+        for p in s.dbm.get_local_directories():
+            p = Path(p)
+            for file in p.rglob('*'):
+                dbm.add_file(str(file))
+        server.DownloadDaemon().notify_devices()
     except socket.timeout:
         logger.info(f"Connection to {ip} timed out!")
         return
