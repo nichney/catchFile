@@ -286,6 +286,7 @@ class FileChangeHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         """Handles file modifications (if needed)."""
+        return
         if event.is_directory:
             return
         file_path = pathlib.Path(event.src_path).resolve()
