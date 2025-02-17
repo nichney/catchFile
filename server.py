@@ -11,6 +11,7 @@ class Server:
     def __init__(self):
         self.dbm = DatabaseManager()
         self.myip = DownloadDaemon().get_local_ip()
+        self.root_dir = 'synced' # КОСТЫЛЬ!!! TODO: find out root_dir
         
 
     def start_file_server(self):
@@ -47,9 +48,11 @@ class Server:
                     conn.close()
                     continue
                 file_path = self.dbm.get_file_path_by_hash(file_hash)
+                relative_path = pathlib.Path(file_path).relative_to(pathlib.Path(self.root_dir)).as_posix().encode()
 
                 if file_path and os.path.exists(file_path):
-                    conn.send(file_path.ljust(255).encode()) # send file path
+                    conn.send(len(relative_path).to_bytes(4, 'big'))
+                    conn.send(relative_path)
                     logger.info(f'Sending file {file_path}')
                     with open(file_path, 'rb') as f:
                         conn.sendfile(f)
@@ -137,6 +140,7 @@ class DownloadDaemon:
         self.dbm.add_device(self.myip)
         self.db_lock = threading.Lock()
         self.observer = Observer()
+        self.root_dir = 'synced' # КОСТЫЛЬ!!!
 
     def get_local_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -151,24 +155,22 @@ class DownloadDaemon:
         try:
             client.connect((host, 65432))
             client.send(file_hash.encode())
-            response = client.recv(255)
+            response = client.recv(12)
 
-            if response == b'UNAUTHORIZED':
-                logger.error(f'Access denied by {host}')
+            if response in [b'UNAUTHORIZED', b'NOT_FOUND', b'INVALID_REQUEST']:
+                logger.error(f'Server response: {response.decode()}')
                 return False
-            if response == b'NOT_FOUND':
-                logger.info(f'File {file_hash} not found on {host}')
-                return False
+        
+            length = int.from_bytes(response[:4], 'big')
+            relative_path = client.recv(length).decode().strip()
 
-
-            filename = response.decode().strip() # TODO: WORK WITH PATHS
-            file_path = f'synced_download/{filename}'
-            os.makedirs('synced_download', exist_ok=True)
+            file_path = pathlib.Path(self.root_dir) / pathlib.Path(relative_path)
+            file_path = file_path.resolve()
+            os.makedirs(file_path.parent, exist_ok=True)
 
             with open(file_path, 'wb') as f:
                 while chunk := client.recv(4096):
                     f.write(chunk)
-            self.dbm.add_directory('synced_download')
             self.dbm.add_file(file_path)
             return True
         except socket.timeout:
