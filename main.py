@@ -19,6 +19,7 @@ def addDirectory():
             dbm.add_file(str(file))
             logger.info(f'File {file} added to db')
     dbm.add_directory(str(path))
+    server.DownloadDaemon().notify_devices()
 
 
 def addDevice():
