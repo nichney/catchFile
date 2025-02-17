@@ -48,7 +48,7 @@ class Server:
                     conn.close()
                     continue
                 file_path = self.dbm.get_file_path_by_hash(file_hash)
-                relative_path = pathlib.Path(file_path).relative_to(pathlib.Path(self.root_dir)).as_posix().encode()
+                relative_path = pathlib.Path(file_path).relative_to(pathlib.Path(self.root_dir).resolve()).as_posix().encode()
 
                 if file_path and os.path.exists(file_path):
                     conn.send(len(relative_path).to_bytes(4, 'big'))
@@ -164,7 +164,7 @@ class DownloadDaemon:
             length = int.from_bytes(response[:4], 'big')
             relative_path = client.recv(length).decode().strip()
 
-            file_path = pathlib.Path(self.root_dir) / pathlib.Path(relative_path)
+            file_path = pathlib.Path(self.root_dir).resolve() / pathlib.Path(relative_path)
             file_path = file_path.resolve()
             os.makedirs(file_path.parent, exist_ok=True)
 
