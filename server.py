@@ -24,6 +24,13 @@ class Server:
                 conn, addr = server.accept()
                 conn.settimeout(10)
                 logger.info(f'Connected by {addr}')
+
+                if addr[0] not in self.dbm.get_known_ips():
+                    logger.info(f'Unauthorized request from {addr[0]}, rejecting...')
+                    conn.send(b'UNAUTHORIZED')
+                    conn.close()
+                    continue
+
             except socket.timeout:
                 logger.info('Server accept timeout, continue...')
                 continue
@@ -36,12 +43,14 @@ class Server:
                 file_hash = conn.recv(64).decode().strip()
                 if not file_hash:
                     logger.info(f'Empty message from {addr}')
+                    conn.send(b'INVALID_REQUEST')
+                    conn.close()
                     continue
                 file_path = self.dbm.get_file_path_by_hash(file_hash)
 
                 if file_path and os.path.exists(file_path):
+                    conn.send(file_path.ljust(255).encode()) # send file path
                     logger.info(f'Sending file {file_path}')
-                    conn.send(b'OK')
                     with open(file_path, 'rb') as f:
                         conn.sendfile(f)
                     logger.info('File sent')
@@ -142,21 +151,26 @@ class DownloadDaemon:
         try:
             client.connect((host, 65432))
             client.send(file_hash.encode())
-            response = client.recv(2)
+            response = client.recv(255)
 
-            if response == b'OK':
-                file_path = f'synced_download/{file_hash}'
-                os.makedirs('synced_download', exist_ok=True)
-
-                with open(file_path, 'wb') as f:
-                    while chunk := client.recv(4096):
-                        f.write(chunk)
-                self.dbm.add_directory('synced_download')
-                self.dbm.add_file(file_path)
-                return True
-            else:
+            if response == b'UNAUTHORIZED':
+                logger.error(f'Access denied by {host}')
+                return False
+            if response == b'NOT_FOUND':
                 logger.info(f'File {file_hash} not found on {host}')
                 return False
+
+
+            filename = response.decode().strip() # TODO: WORK WITH PATHS
+            file_path = f'synced_download/{filename}'
+            os.makedirs('synced_download', exist_ok=True)
+
+            with open(file_path, 'wb') as f:
+                while chunk := client.recv(4096):
+                    f.write(chunk)
+            self.dbm.add_directory('synced_download')
+            self.dbm.add_file(file_path)
+            return True
         except socket.timeout:
             logger.error(f'Connection to {host} timed out!')
             return False
