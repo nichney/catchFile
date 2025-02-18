@@ -39,10 +39,7 @@ class MagnetLinkGenerator:
     def generate_magnet_link(self, key):
         '''Create encrypted magnet-link, including encryption key'''
         shared_db_hash = self._calculate_db_hash()
-        payload = json.dumps({'device_id': self.device_id, 
-                              'db_hash': shared_db_hash,
-                              'ip': self.myip
-                              })
+        payload = json.dumps({'ip': self.myip})
 
         encrypted_payload = self._encrypt_data(payload, key)
         encrypted_key = base64.urlsafe_b64encode(key).decode() 

@@ -40,7 +40,6 @@ def connect2device():
         logger.error(f'Invalid magnet link: {e}')
         return
 
-    shared_db_hash = link_data['db_hash']
     ip = link_data['ip']
     if not shared_db_hash or not ip:
         logger.error(f'Magnet link {magnet_link} missing for some information')
@@ -48,8 +47,7 @@ def connect2device():
 
     s = server.Server()
 
-    logger.info(f'Connected to device! Shared DB hash: {shared_db_hash}')
-    logger.info(f'Encryption key (store securely!): {key.hex()}')
+    logger.info(f'Connected to device! Encryption key (store securely!): {key.hex()}')
     try:
         s.download_shared_db(ip)
         for p in s.dbm.get_local_directories():
