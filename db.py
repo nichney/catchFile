@@ -20,7 +20,6 @@ class DatabaseManager:
         '''Create shared DB if not exists'''
         try:
             with sqlite3.connect(self.shared_db) as conn:
-                #self._enable_wal_mode(conn)
                 cursor = conn.cursor()
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS files (
@@ -50,7 +49,6 @@ class DatabaseManager:
         '''Create local DB if not exists'''
         try:
             with sqlite3.connect(self.local_db) as conn:
-                #self._enable_wal_mode(conn)
                 cursor = conn.cursor()
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS local_files (
@@ -71,12 +69,6 @@ class DatabaseManager:
             logger.info('Local database initialized')
         except sqlite3.Error as e:
                 logger.error(f'Error initializing local.db: {e}')
-
-    def _enable_wal_mode(self, conn):
-        '''Enable Write-Ahead Logging mode for better performance on multi-threading'''
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL;")
-        conn.commit()
 
     def _calculate_file_hash(self, file_path, chunk_size=65536):
         # SHA-256
