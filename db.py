@@ -308,3 +308,14 @@ class DatabaseManager:
                 return [row[0] for row in result]
         except sqlite3.Error as e:
                 logger.error(f'Database error while getting known ips: {e}')
+
+    def cleanup_deleted_files(self):
+        try:
+            with sqlite3.connect(self.shared_db) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM files WHERE deleted = 1')
+                conn.commit()
+            logger.info('Deleted files cleaned up from shared database')
+        except sqlite3.Error as e:
+            logger.error(f'Database error while cleaning up deleted files: {e}')
+
