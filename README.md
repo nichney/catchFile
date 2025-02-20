@@ -40,7 +40,6 @@ python main.py
 
 ##  Планируется добавить  
 - Шифрование файлов при передаче
-- Кроссплатформенность
 
 ##  Лицензия  
 This software is licensed under the GNU Affero General Public License v3.0 (AGPLv3).  
