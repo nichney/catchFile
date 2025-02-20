@@ -271,7 +271,7 @@ class DatabaseManager:
                 shared_cursor.execute('SELECT hash FROM files WHERE deleted = 0')
                 shared_files = {row[0] for row in shared_cursor.fetchall()}
 
-                local_cursor.execute('SELECT hash FROM local_files WHERE ignored = 0')
+                local_cursor.execute('SELECT hash FROM local_files')
                 local_files = {row[0] for row in local_cursor.fetchall()}
                 return list(shared_files - local_files)
         except sqlite3.Error as e:
