@@ -41,7 +41,7 @@ def connect2device():
         return
 
     ip = link_data['ip']
-    if not shared_db_hash or not ip:
+    if not ip:
         logger.error(f'Magnet link {magnet_link} missing for some information')
         return
 
