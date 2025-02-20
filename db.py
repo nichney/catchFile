@@ -33,7 +33,8 @@ class DatabaseManager:
                 cursor.execute('''
                         CREATE TABLE IF NOT EXISTS devices (
                             ip TEXT PRIMARY KEY, 
-                            last_seen INTEGER
+                            last_seen INTEGER,
+                            key TEXT
                         )
                 ''')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_files_deleted ON files (deleted);')
@@ -193,7 +194,7 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.error(f'Database error while retrieving file hash by path: {e}')
 
-    def add_device(self, ip):
+    def add_device(self, ip, key):
         '''Add device ip to shared database.
             Ip here is safe, there's not need in validation
         '''
@@ -202,8 +203,8 @@ class DatabaseManager:
                 cursor = conn.cursor()
                 cursor.execute('''
                     INSERT INTO devices (ip, last_seen)
-                    VALUES (?, ?) ON CONFLICT(ip) DO UPDATE SET last_seen=?
-                ''', (ip, int(time.time()), int(time.time())))
+                    VALUES (?, ?, ?) ON CONFLICT(ip) DO UPDATE SET last_seen=?, key=?
+                ''', (ip, int(time.time()), key, int(time.time()), key))
                 conn.commit()
                 logger.info(f'Device {ip} added/updated in shared database')
         except sqlite3.Error as e:
@@ -303,11 +304,22 @@ class DatabaseManager:
         try:
             with sqlite3.connect(self.shared_db) as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT ip FROM devices')
+                cursor.execute('SELECT ip, key FROM devices')
                 result = cursor.fetchall()
-                return [row[0] for row in result]
+                return result
         except sqlite3.Error as e:
                 logger.error(f'Database error while getting known ips: {e}')
+
+    def get_key_by_ip(self, ip):
+        try:
+            with sqlite3.connect(self.shared_db) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT key FROM devices WHERE ip=?', (ip, ))
+                result = cursor.fetchone()
+                return result
+        except sqlite3.Error as e:
+                logger.error(f'Database error while getting key by ip: {e}')
+
 
     def cleanup_deleted_files(self):
         try:
