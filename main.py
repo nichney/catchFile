@@ -41,6 +41,7 @@ def connect2device():
         return
 
     ip = link_data['ip']
+    key = str(key)
     if not ip:
         logger.error(f'Magnet link {magnet_link} missing for some information')
         return
@@ -49,7 +50,8 @@ def connect2device():
 
     logger.info(f'Connected to device! Encryption key (store securely!): {key.hex()}')
     try:
-        s.download_shared_db(ip)
+        s.echo_link(ip, key)
+        s.download_shared_db(ip, key)
         for p in s.dbm.get_local_directories():
             p = Path(p)
             for file in p.rglob('*'):
@@ -63,7 +65,7 @@ def connect2device():
         return
 
     dbm = db.DatabaseManager()
-    dbm.add_device(ip)
+    dbm.add_device(ip, key)
     server.DownloadDaemon().download_missing_files()
 
 def removeDirectory():

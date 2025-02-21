@@ -1,9 +1,12 @@
 # Copyright (C) 2025 Kirill Osmolovsky
-import socket, os, time, pathlib, hashlib, threading
+import socket, os, time, pathlib, hashlib, threading, link_resolver
 from db import DatabaseManager
 from log import Logger
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
 
 logger = Logger().get_logger()
 
@@ -12,6 +15,24 @@ class Server:
         self.dbm = DatabaseManager()
         self.myip = DownloadDaemon().get_local_ip()
         self.root_dir = 'synced' # КОСТЫЛЬ!!! TODO: find out root_dir
+
+    def _enc_file(self, file, shared_key):
+        nonce = os.urandom(12)
+        cipher = Cipher(algorithms.AES(shared_key), modes.GCM(nonce))
+        encryptor = cipher.encryptor()
+        with open(file, 'rb') as f:
+            plain = f.read()
+        ciphertext = encryptor.update(plain) + encryptor.finalize()
+        return nonce + ciphertext + encryptor.tag
+
+    def _dec_file(self, enc_data, shared_key):
+        nonce = enc_data[:12]
+        ciphertext = enc_data[12:-16]
+        tag = enc_data[-16:]
+
+        cipher = Cipher(algorithms.AES(shared_key), modes.GCM(nonce, tag))
+        decryptor = cipher.decryptor()
+        return decryptor.update(ciphertext) + decryptor.finalize()
         
 
     def start_file_server(self):
@@ -83,7 +104,6 @@ class Server:
                     logger.info(f'Recieved signal from self, ignoring...')
                     continue
                 logger.info(f'Connected by {addr}')
-                self.dbm.add_device(str(addr[0])) 
             except socket.timeout:
                 logger.info('Server accept timeout, continue...')
                 continue
@@ -94,13 +114,19 @@ class Server:
                     logger.info(f'Empty message from {addr}')
                     continue
 
-                if message == 'DB_UPDATED':
+                if message == b'DB_UPDATED':
                     logger.info(f'Received DB_UPDATED notification from {addr}, downloading new database...')
                     self.download_shared_db(addr[0])
+                elif message == b'LINK_ECHO':
+                    key = conn.recv(1024).decode().strip()
+                    self.dbm.add_device(str(addr[0]), str(key))
+                    #DownloadDaemon.notify_devices() #Idk when
                 else:
+                    key = self.dbm.get_key_by_ip(addr[0])
                     logger.info(f'Sending shared.db to {addr}...')
-                    with open('shared.db', 'rb') as f:
-                        conn.sendfile(f)
+                    enc_data = self._enc_file('shared.db', key)
+                    conn.sendall(len(enc_data).to_bytes(4, 'big'))
+                    conn.sendall(enc_data)                   
                     logger.info('Database sent successfully!')
             except socket.timeout:
                 logger.warning(f'Timeout waiting for data from {addr}, closing connection')
@@ -109,7 +135,22 @@ class Server:
             finally:
                 conn.close()
 
-    def download_shared_db(self, host):
+    def echo_link(self, ip, key):   
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.settimeout(10)
+        try:
+            client.connect((ip, 65431))
+            client.send(b'LINK_ECHO')
+            client.send(key.encode())
+
+        except socket.timeout:
+            logger.info(f'Connection to {ip} timed out!')
+        except Exception as e:
+            logger.error(f'Error: {e}')
+        finally:
+            client.close()
+
+    def download_shared_db(self, host, key):
         '''Download shared.db'''
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.settimeout(10)
@@ -117,9 +158,18 @@ class Server:
             client.connect((host, 65431))
             client.send(b'DB_NOT_UPDATED')
 
+            data_len = int.from_bytes(client.recv(4), 'big')
+            enc_data = b''
+            with len(enc_data) < data_len:
+                chunk = client.recv(4096)
+                if not chunk:
+                    break
+                enc_data += chunk
+
+            dec_data = self._dec_file(enc_data, key)
+
             with open('shared.db', 'wb') as f:
-                while chunk := client.recv(4096):
-                    f.write(chunk)
+                f.write(dec_data)
 
             logger.info('Shared database downloaded! Recieving missing files...')
             DownloadDaemon().download_missing_files()
