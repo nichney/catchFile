@@ -48,7 +48,7 @@ def connect2device():
 
     s = server.Server()
 
-    logger.info(f'Connected to device! Encryption key (store securely!): {key.hex()}')
+    logger.info(f'Connected to device! Encryption key (store securely!): {key}')
     try:
         s.echo_link(ip, key)
         s.download_shared_db(ip, key)
