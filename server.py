@@ -53,7 +53,7 @@ class Server:
                 if file_path and os.path.exists(file_path):
                     conn.send(len(relative_path).to_bytes(4, 'big'))
                     conn.send(relative_path)
-                    key = self.dbm.get_key_by_ip(addr[0])
+                    key = self.dbm.get_key_by_ip(addr[0])[0]
                     enc_data = encryption.enc_file(file_path, key)
                     logger.info(f'Sending file {file_path}')
                     conn.sendall(len(enc_data).to_bytes(4, 'big'))
@@ -103,7 +103,7 @@ class Server:
                     self.dbm.add_device(str(addr[0]), str(key))
                     #DownloadDaemon.notify_devices() #Idk when
                 else:
-                    key = self.dbm.get_key_by_ip(addr[0])
+                    key = self.dbm.get_key_by_ip(addr[0])[0]
                     logger.info(f'Sending shared.db to {addr}...')
                     enc_data = encryption.enc_file('shared.db', key)
                     conn.sendall(len(enc_data).to_bytes(4, 'big'))
@@ -168,7 +168,7 @@ class DownloadDaemon:
         self.myip = self.get_local_ip()
         logger.info(f'MY IP IS {self.myip}')
         #self.s = Server()
-        self.dbm.add_device(self.myip, self.dbm.get_key_by_ip(self.myip))
+        self.dbm.add_device(self.myip, self.dbm.get_key_by_ip(self.myip)[0])
         self.db_lock = threading.Lock()
         self.observer = Observer()
         self.root_dir = 'synced' # КОСТЫЛЬ!!!
@@ -200,7 +200,7 @@ class DownloadDaemon:
             os.makedirs(file_path.parent, exist_ok=True)
 
             data_len = int.from_bytes(client.recv(4), 'big')
-            key = self.dbm.get_key_by_ip(self.myip)
+            key = self.dbm.get_key_by_ip(self.myip)[0]
 
             enc_data = b''
             while len(enc_data) < data_len:
