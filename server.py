@@ -4,9 +4,7 @@ from db import DatabaseManager
 from log import Logger
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
+import encryption
 
 logger = Logger().get_logger()
 
@@ -15,25 +13,6 @@ class Server:
         self.dbm = DatabaseManager()
         self.myip = DownloadDaemon().get_local_ip()
         self.root_dir = 'synced' # КОСТЫЛЬ!!! TODO: find out root_dir
-
-    def _enc_file(self, file, shared_key):
-        nonce = os.urandom(12)
-        cipher = Cipher(algorithms.AES(shared_key), modes.GCM(nonce))
-        encryptor = cipher.encryptor()
-        with open(file, 'rb') as f:
-            plain = f.read()
-        ciphertext = encryptor.update(plain) + encryptor.finalize()
-        return nonce + ciphertext + encryptor.tag
-
-    def _dec_file(self, enc_data, shared_key):
-        nonce = enc_data[:12]
-        ciphertext = enc_data[12:-16]
-        tag = enc_data[-16:]
-
-        cipher = Cipher(algorithms.AES(shared_key), modes.GCM(nonce, tag))
-        decryptor = cipher.decryptor()
-        return decryptor.update(ciphertext) + decryptor.finalize()
-        
 
     def start_file_server(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -47,7 +26,7 @@ class Server:
                 conn.settimeout(10)
                 logger.info(f'Connected by {addr}')
 
-                if addr[0] not in self.dbm.get_known_ips():
+                if addr[0] not in (i[0] for i in zip(*self.dbm.get_known_ips())):
                     logger.info(f'Unauthorized request from {addr[0]}, rejecting...')
                     conn.send(b'UNAUTHORIZED')
                     conn.close()
@@ -74,9 +53,11 @@ class Server:
                 if file_path and os.path.exists(file_path):
                     conn.send(len(relative_path).to_bytes(4, 'big'))
                     conn.send(relative_path)
+                    key = self.dbm.get_key_by_ip(addr[0])
+                    enc_data = encryption.enc_file(file_path, key)
                     logger.info(f'Sending file {file_path}')
-                    with open(file_path, 'rb') as f:
-                        conn.sendfile(f)
+                    conn.sendall(len(enc_data).to_bytes(4, 'big'))
+                    conn.sendall(enc_data)  
                     logger.info('File sent')
                     conn.close()
                 else:
@@ -124,7 +105,7 @@ class Server:
                 else:
                     key = self.dbm.get_key_by_ip(addr[0])
                     logger.info(f'Sending shared.db to {addr}...')
-                    enc_data = self._enc_file('shared.db', key)
+                    enc_data = encryption.enc_file('shared.db', key)
                     conn.sendall(len(enc_data).to_bytes(4, 'big'))
                     conn.sendall(enc_data)                   
                     logger.info('Database sent successfully!')
@@ -160,13 +141,13 @@ class Server:
 
             data_len = int.from_bytes(client.recv(4), 'big')
             enc_data = b''
-            with len(enc_data) < data_len:
+            while len(enc_data) < data_len:
                 chunk = client.recv(4096)
                 if not chunk:
                     break
                 enc_data += chunk
 
-            dec_data = self._dec_file(enc_data, key)
+            dec_data = encryption.dec_file(enc_data, key)
 
             with open('shared.db', 'wb') as f:
                 f.write(dec_data)
@@ -187,7 +168,7 @@ class DownloadDaemon:
         self.myip = self.get_local_ip()
         logger.info(f'MY IP IS {self.myip}')
         #self.s = Server()
-        self.dbm.add_device(self.myip)
+        self.dbm.add_device(self.myip, self.dbm.get_key_by_ip(self.myip))
         self.db_lock = threading.Lock()
         self.observer = Observer()
         self.root_dir = 'synced' # КОСТЫЛЬ!!!
@@ -218,9 +199,20 @@ class DownloadDaemon:
             file_path = file_path.resolve()
             os.makedirs(file_path.parent, exist_ok=True)
 
+            data_len = int.from_bytes(client.recv(4), 'big')
+            key = self.dbm.get_key_by_ip(self.myip)
+
+            enc_data = b''
+            while len(enc_data) < data_len:
+                chunk = client.recv(4096)
+                if not chunk:
+                    break
+                enc_data += chunk
+
+            dec_data = encryption.dec_file(enc_data, key)
+
             with open(file_path, 'wb') as f:
-                while chunk := client.recv(4096):
-                    f.write(chunk)
+                f.write(dec_data)
             self.dbm.add_file(str(file_path))
             return True
         except socket.timeout:
@@ -237,7 +229,7 @@ class DownloadDaemon:
         if not missing_files:
             logger.info('No missing files found')
             return
-        shared_ips = self.dbm.get_known_ips()
+        shared_ips = (i[0] for i in zip(*self.dbm.get_known_ips()))
 
         for file_hash in missing_files:
             for ip in shared_ips:
@@ -264,7 +256,7 @@ class DownloadDaemon:
                 logger.error(f'Error {e}')
 
     def notify_devices(self):
-        shared_ips = self.dbm.get_known_ips()
+        shared_ips = (i[0] for i in zip(*self.dbm.get_known_ips()))
         for ip in shared_ips:
             if ip == self.myip:
                 continue
