@@ -202,7 +202,7 @@ class DatabaseManager:
             with sqlite3.connect(self.shared_db) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO devices (ip, last_seen)
+                    INSERT INTO devices (ip, last_seen, key)
                     VALUES (?, ?, ?) ON CONFLICT(ip) DO UPDATE SET last_seen=?, key=?
                 ''', (ip, int(time.time()), key, int(time.time()), key))
                 conn.commit()
